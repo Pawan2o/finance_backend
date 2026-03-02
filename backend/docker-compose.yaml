@@ -1,0 +1,35 @@
+version: '4'
+
+services:
+  # dl-gateway:
+  #   image: git.humbingo.org/docker/dailyledger-gateway:v8
+  #   container_name: dl-gateway
+  #   restart: always
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+
+
+  #   command: bash -c "python manage.py makemigrations --merge  && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+  #   volumes:
+  #     - .:/dl-gateway
+  #   ports:
+  #     - "8001:8000"
+  #   labels:
+  #     - kompose.service.type=NodePort  # Tell kompose to create LoadBalancer
+  #     - kompose.service.expose=true        # Expose service externally
+  #     - kompose.service.nodeport=30001
+  #   depends_on:
+  #     - dl-db-gateway
+
+  nw-db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: humbingo
+      POSTGRES_DB: nw-db
+      POSTGRES_PASSWORD: Welcome@1
+    volumes:
+      - ./nw-db:/var/lib/postgresql/data
+    ports:
+      - "5459:5432"
