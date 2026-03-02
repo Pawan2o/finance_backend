@@ -69,7 +69,7 @@ class VerifyEmailOTP(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if str(stored_otp) != str(otp):
+        if str(stored_otp) != str(otp): 
             return Response(
                 {"error": "Invalid OTP"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -92,8 +92,7 @@ class VerifyEmailOTP(APIView):
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
-        # Get user role dynamically
-        role_name = 'user'
+        
         if user.is_superuser:
             role_name = 'admin'
         elif user.groups.exists():
@@ -102,6 +101,5 @@ class VerifyEmailOTP(APIView):
         return Response({
             "message": "OTP verified successfully",
             "access": access_token,
-            "refresh": refresh_token,
-            "role": {"name": role_name}
+            "refresh": refresh_token
         }, status=status.HTTP_200_OK)

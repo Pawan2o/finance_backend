@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'channels',
     'django_seed',
+    
     'api',
     'security',
     
