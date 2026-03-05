@@ -9,3 +9,4 @@ class ApiConfig(AppConfig):
         import api.UserProfile
         import api.Type.model
         import api.Category.model
+        import api.PaymentMethod.model

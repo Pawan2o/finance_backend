@@ -12,6 +12,7 @@ from api.CreateUser import views as createUserViews
 from api.CustomApi.emailotp import SendEmailOTP,VerifyEmailOTP
 from api.Type.view import TypeViewSet
 from api.Category.view import CategoryViewSet
+from api.PaymentMethod.view import PaymentMethodViewSet
 
 from rest_framework import routers
 from rest_framework import permissions
@@ -19,11 +20,12 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 router=routers.DefaultRouter()
-router.register(r'user',userView.UserViewset, basename='user'),
-router.register(r'role',roleView.RoleViewset, basename='role'),
-router.register(r'permission', permissionView.PermissionViewset, basename='permission'),
-router.register(r'type', TypeViewSet, basename='type'),
-router.register(r'category', CategoryViewSet, basename='category'),
+router.register(r'user',userView.UserViewset, basename='user')
+router.register(r'role',roleView.RoleViewset, basename='role')
+router.register(r'permission', permissionView.PermissionViewset, basename='permission')
+router.register(r'type', TypeViewSet, basename='type')
+router.register(r'category', CategoryViewSet, basename='category')
+router.register(r'paymentMethod', PaymentMethodViewSet, basename='paymentMethod')
 
 # Create a schema view for drf-yasg
 schema_view = get_schema_view(
