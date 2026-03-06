@@ -15,6 +15,11 @@ from api.Category.view import CategoryViewSet
 from api.PaymentMethod.view import PaymentMethodViewSet
 from api.Transactions.view import TransactionViewSet
 
+
+
+#Custom API
+from api.CustomApi.deleteUser import DeleteUserAPI
+
 from rest_framework import routers
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
@@ -53,6 +58,9 @@ urlpatterns = [
     # path('pass-reset/<str:temp_token>/', PasswordResetConfirmView.as_view(), name='pass-reset'),  # put it in security(auth) app's urls
     path('isSuperUser/', CheckUserType.as_view(), name='isSuperUser'),
     path('createUser/', createUserViews.CreateUserAPI.as_view(), name='create-user'),
+    
+    path('deleteUser/<uuid:user_id>/', DeleteUserAPI.as_view(), name='delete_user'),
+
     
     # path('sendOtp/', SendEmailOTP.as_view(), name='sendOtp'),
     # path('verifyOtp/', VerifyEmailOTP.as_view(), name='verifyOtp'),
