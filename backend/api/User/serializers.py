@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User, Group
+from api.User.model import CustomUser
+from django.contrib.auth.models import Group
 from django.contrib.auth.hashers import make_password
 from api.UserProfile.model import UserProfile
 
@@ -7,83 +8,121 @@ from api.UserProfile.model import UserProfile
 class UserSerializer(serializers.ModelSerializer):
     groups = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=Group.objects.all()
+        queryset=Group.objects.all(),
+        required=False
     )
-    contact_no = serializers.IntegerField(required=False)
-    
+
+    contact_no = serializers.CharField(required=False, allow_null=True)
+    date_of_birth = serializers.DateField(
+        format="%d/%m/%Y",
+        input_formats=["%d/%m/%Y", "%Y-%m-%d"],
+        required=False,
+        allow_null=True
+    )
+
     class Meta:
-        model = User
-        fields = ['id', 'username', 'password', 'email', 'first_name', 'last_name', 'groups', 'is_staff','is_active', 'contact_no']
+        model = CustomUser
+        fields = ['id','username','password','email','first_name','last_name','groups','is_staff','is_active','contact_no','date_of_birth']
+
         extra_kwargs = {
             'password': {'write_only': True},
-            'username': {'required': False}
+            'username': {'required': False},
+            'id': {'read_only': True}
         }
 
+    # Email validation
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        user = self.instance
+        if CustomUser.objects.filter(email=value).exclude(pk=user.pk if user else None).exists():
             raise serializers.ValidationError("This email is already registered.")
         return value
 
+    # Response formatting
     def to_representation(self, instance):
-        # Get the original serialized data
-        representation = super(UserSerializer, self).to_representation(instance)
+        representation = super().to_representation(instance)
 
-        # Retrieve the UserProfile's contact_no and add it to the representation
         try:
-            representation['contact_no'] = instance.userprofile.contact_no
+            contact_no = instance.userprofile.contact_no
+            date_of_birth = (
+                instance.userprofile.date_of_birth.strftime("%d/%m/%Y")
+                if instance.userprofile.date_of_birth else None
+            )
         except UserProfile.DoesNotExist:
-            representation['contact_no'] = None
+            contact_no = None
+            date_of_birth = None
 
-        return representation
+        return {
+            **representation,
+            'contact_no': contact_no,
+            'date_of_birth': date_of_birth
+        }
 
+    # Create User
     def create(self, validated_data):
+
         groups_data = validated_data.pop('groups', [])
         contact_no = validated_data.pop('contact_no', None)
+        date_of_birth = validated_data.pop('date_of_birth', None)
 
-        # Set username as email if not provided
-        if 'username' not in validated_data or not validated_data['username']:
-            validated_data['username'] = validated_data['email']
+        # username = email if not provided
+        if not validated_data.get('username'):
+            validated_data['username'] = validated_data.get('email')
 
-        # Hash the password before saving the user
+        # hash password
         if 'password' in validated_data:
             validated_data['password'] = make_password(validated_data['password'])
-        
-        # Create the user
-        user = super(UserSerializer, self).create(validated_data)
-        
-        # Set the groups for the user
-        user.groups.set(groups_data)
-        self._update_user_permissions(user)
 
-        # Create the UserProfile linked to the user
-        if contact_no is not None:
-            UserProfile.objects.create(user=user, contact_no=contact_no)
+        user = super().create(validated_data)
+
+        # set groups
+        if groups_data:
+            user.groups.set(groups_data)
+            self._update_user_permissions(user)
+
+        # create profile
+        UserProfile.objects.create(
+            user=user,
+            contact_no=contact_no,
+            date_of_birth=date_of_birth
+        )
 
         return user
 
+    # Update User
     def update(self, instance, validated_data):
-        groups_data = validated_data.pop('groups', [])
+
+        groups_data = validated_data.pop('groups', None)
         contact_no = validated_data.pop('contact_no', None)
+        date_of_birth = validated_data.pop('date_of_birth', None)
 
-        # Hash the password before saving the user
+        # update password
         if 'password' in validated_data:
-            validated_data['password'] = make_password(validated_data['password'])
+            instance.set_password(validated_data.pop('password'))
 
-        # Update the user instance
-        instance = super(UserSerializer, self).update(instance, validated_data)
-        
-        # Update the groups for the user
-        instance.groups.set(groups_data)
-        self._update_user_permissions(instance)
+        # update user fields
+        instance = super().update(instance, validated_data)
 
-        # Update or create UserProfile linked to the user
-        if contact_no is not None:
-            UserProfile.objects.update_or_create(user=instance, defaults={'contact_no': contact_no})
+        # update groups only if provided
+        if groups_data is not None:
+            instance.groups.set(groups_data)
+            self._update_user_permissions(instance)
+
+        # update or create profile
+        UserProfile.objects.update_or_create(
+            user=instance,
+            defaults={
+                'contact_no': contact_no,
+                'date_of_birth': date_of_birth
+            }
+        )
 
         return instance
 
+    # update permissions from groups
     def _update_user_permissions(self, user):
         permissions = set()
+
         for group in user.groups.all():
             permissions.update(group.permissions.all())
+
         user.user_permissions.set(permissions)

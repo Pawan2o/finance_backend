@@ -7,7 +7,7 @@ from django.core.mail import EmailMessage
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.contrib.auth.models import User
+from api.User.model import CustomUser
 from rest_framework.permissions import AllowAny
 from rest_framework import serializers
 from django.conf import settings
@@ -19,11 +19,11 @@ class PasswordResetRequestView(APIView):
 
     def post(self, request):
         email = request.data.get('email')
-        user = User.objects.filter(email=email).first()
+        user = CustomUser.objects.filter(email=email).first()
 
         if user:
             token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            uid = urlsafe_base64_encode(force_bytes(str(user.pk)))
 
             # Create a temporary token and store it in cache
             temp_token = str(uuid.uuid4())
@@ -74,8 +74,8 @@ class PasswordResetConfirmView(APIView):
 
             try:
                 uid = force_str(urlsafe_base64_decode(uidb64))
-                user = User.objects.get(pk=uid)
-            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                user = CustomUser.objects.get(pk=uid)
+            except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
                 return Response({"detail": "Invalid link"}, status=status.HTTP_400_BAD_REQUEST)
 
             if default_token_generator.check_token(user, token):

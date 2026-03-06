@@ -6,7 +6,9 @@ class ApiConfig(AppConfig):
     name = 'api'
 
     def ready(self):
+        import api.User.model
         import api.UserProfile
         import api.Type.model
         import api.Category.model
         import api.PaymentMethod.model
+        import api.Transactions.model
