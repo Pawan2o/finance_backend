@@ -13,12 +13,13 @@ class Category(models.Model):
     type = models.ForeignKey(
         Type,
         on_delete=models.CASCADE,
-        related_name="categories"
+        related_name="categories",
+        db_index=True
     )
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, db_index=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
 

@@ -1,33 +1,26 @@
-# api/Category/view.py
-
-from rest_framework import viewsets, status
-from rest_framework.response import Response
+from rest_framework import viewsets
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 from api.Category.model import Category
 from api.Category.serializer import CategorySerializer
+from api.response_formatter import APIResponse
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ['name']
+    filterset_fields = ['type', 'created_at']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['-created_at']
 
     def get_queryset(self):
-        queryset = Category.objects.filter(deleted_at__isnull=True)
+        return Category.objects.filter(deleted_at__isnull=True).select_related('type')
 
-        # Filter by type ( ?type=1 )
-        type_id = self.request.query_params.get("type")
-        if type_id:
-            queryset = queryset.filter(type_id=type_id)
-
-        return queryset
-
-    # Soft delete instead of hard delete
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.deleted_at = timezone.now()
         instance.save()
-
-        return Response(
-            {"message": "Category deleted successfully"},
-            status=status.HTTP_200_OK,
-        )
+        return APIResponse.deleted("Category deleted successfully")
