@@ -22,12 +22,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['id','username','password','email','first_name','last_name','groups','is_staff','is_active','contact_no','date_of_birth']
+        fields = ['id','username','password','email','first_name','last_name','groups','is_staff','is_active','is_superuser','date_joined','last_login','contact_no','date_of_birth']
 
         extra_kwargs = {
             'password': {'write_only': True},
             'username': {'required': False},
-            'id': {'read_only': True}
+            'id': {'read_only': True},
+            'date_joined': {'read_only': True},
+            'last_login': {'read_only': True}
         }
 
     # Email validation
