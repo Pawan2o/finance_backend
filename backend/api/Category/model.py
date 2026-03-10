@@ -23,8 +23,5 @@ class Category(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
-    class Meta:
-        unique_together = ("type", "name")
-
     def __str__(self):
         return self.name
