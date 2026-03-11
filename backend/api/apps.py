@@ -12,3 +12,4 @@ class ApiConfig(AppConfig):
         import api.Category.model
         import api.PaymentMethod.model
         import api.Transactions.model
+        import api.Greeting.model

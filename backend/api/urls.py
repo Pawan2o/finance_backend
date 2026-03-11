@@ -14,6 +14,7 @@ from api.Type.view import TypeViewSet
 from api.Category.view import CategoryViewSet
 from api.PaymentMethod.view import PaymentMethodViewSet
 from api.Transactions.view import TransactionViewSet
+from api.Greeting.view import GreetingViewSet
 
 
 
@@ -33,6 +34,9 @@ router.register(r'type', TypeViewSet, basename='type')
 router.register(r'category', CategoryViewSet, basename='category')
 router.register(r'paymentMethod', PaymentMethodViewSet, basename='paymentMethod')
 router.register(r'transaction', TransactionViewSet, basename='transaction')
+router.register(r'greeting', GreetingViewSet, basename='greeting')
+
+
 
 # Create a schema view for drf-yasg
 schema_view = get_schema_view(
