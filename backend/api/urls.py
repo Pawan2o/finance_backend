@@ -16,7 +16,7 @@ from api.PaymentMethod.view import PaymentMethodViewSet
 from api.Transactions.view import TransactionViewSet
 from api.Greeting.view import GreetingViewSet
 from api.RecurringTransaction.view import RecurringTransactionViewSet
-
+from api.Budget.view import BudgetViewSet
 
 
 #Custom API
@@ -37,7 +37,7 @@ router.register(r'paymentMethod', PaymentMethodViewSet, basename='paymentMethod'
 router.register(r'transaction', TransactionViewSet, basename='transaction')
 router.register(r'greeting', GreetingViewSet, basename='greeting')
 router.register(r'recurring', RecurringTransactionViewSet, basename='recurring')
-
+router.register(r'budgets', BudgetViewSet, basename='budgets')
 
 
 # Create a schema view for drf-yasg
