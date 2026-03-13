@@ -13,3 +13,5 @@ class ApiConfig(AppConfig):
         import api.PaymentMethod.model
         import api.Transactions.model
         import api.Greeting.model
+        import api.RecurringTransaction.model
+        

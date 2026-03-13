@@ -23,6 +23,7 @@ class CategorySerializer(serializers.ModelSerializer):
             "id",
             "type",
             "name",
+            "material_icon",
             "created_at",
             "updated_at",
             "deleted_at",

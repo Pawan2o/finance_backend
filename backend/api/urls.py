@@ -15,6 +15,7 @@ from api.Category.view import CategoryViewSet
 from api.PaymentMethod.view import PaymentMethodViewSet
 from api.Transactions.view import TransactionViewSet
 from api.Greeting.view import GreetingViewSet
+from api.RecurringTransaction.view import RecurringTransactionViewSet
 
 
 
@@ -35,6 +36,7 @@ router.register(r'category', CategoryViewSet, basename='category')
 router.register(r'paymentMethod', PaymentMethodViewSet, basename='paymentMethod')
 router.register(r'transaction', TransactionViewSet, basename='transaction')
 router.register(r'greeting', GreetingViewSet, basename='greeting')
+router.register(r'recurring', RecurringTransactionViewSet, basename='recurring')
 
 
 

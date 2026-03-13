@@ -18,6 +18,7 @@ class Category(models.Model):
     )
 
     name = models.CharField(max_length=255, db_index=True)
+    material_icon = models.CharField(max_length=100, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
