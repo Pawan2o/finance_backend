@@ -18,9 +18,9 @@ class BudgetViewSet(viewsets.ModelViewSet):
 
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
 
-    filterset_fields = ["month", "year", "week", "category", "category__type"]
-    ordering_fields = ["month", "year", "week", "amount", "created_at"]
-    ordering = ["-year", "-month", "-week", "category__name"]
+    filterset_fields = ["month", "year", "week", "quarterly", "category", "category__type"]
+    ordering_fields = ["month", "year", "week", "quarterly", "amount", "created_at"]
+    ordering = ["-year", "-month", "-week", "-quarterly", "category__name"]
     search_fields = ["category__name"]
 
     def get_queryset(self):
@@ -36,6 +36,78 @@ class BudgetViewSet(viewsets.ModelViewSet):
         instance.deleted_at = timezone.now()
         instance.save(update_fields=["deleted_at"])
 
+    @action(detail=False, methods=['get'])
+    def current_quarter(self, request):
+        """Get current quarter's budgets (3 months from current month)"""
+        now = timezone.now()
+        current_month = now.month
+        current_year = now.year
+        
+        # Calculate 3 months from current month
+        quarter_months = []
+        for i in range(3):
+            month = current_month + i
+            year = current_year
+            if month > 12:
+                month = month - 12
+                year = year + 1
+            quarter_months.append((month, year))
+        
+        # Filter budgets for these 3 months
+        q_filter = Q()
+        for month, year in quarter_months:
+            q_filter |= Q(month=month, year=year)
+            
+        budgets = self.get_queryset().filter(q_filter)
+        serializer = self.get_serializer(budgets, many=True)
+        return Response({
+            'current_quarter_months': quarter_months,
+            'budgets': serializer.data
+        })
+
+    @action(detail=False, methods=['get'])
+    def quarterly_summary(self, request):
+        """Get quarterly budget summary (3 months from specified start month)"""
+        try:
+            start_month = int(request.query_params.get('start_month', timezone.now().month))
+            year = int(request.query_params.get('year', timezone.now().year))
+            
+            if not (1 <= start_month <= 12):
+                return Response({'error': 'Start month must be between 1-12'}, status=status.HTTP_400_BAD_REQUEST)
+            if not (2000 <= year <= 2100):
+                return Response({'error': 'Year must be between 2000-2100'}, status=status.HTTP_400_BAD_REQUEST)
+                
+        except ValueError:
+            return Response({'error': 'Invalid start_month or year'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate 3 months from start month
+        quarter_months = []
+        for i in range(3):
+            month = start_month + i
+            calc_year = year
+            if month > 12:
+                month = month - 12
+                calc_year = year + 1
+            quarter_months.append((month, calc_year))
+        
+        # Filter budgets for these 3 months
+        q_filter = Q()
+        for month, calc_year in quarter_months:
+            q_filter |= Q(month=month, year=calc_year)
+            
+        budgets = self.get_queryset().filter(q_filter)
+        summary_data = budgets.aggregate(
+            total=Sum('amount'),
+            count=Count('id')
+        )
+        
+        return Response({
+            'start_month': start_month,
+            'year': year,
+            'quarter_months': quarter_months,
+            'total_budget': summary_data['total'] or 0,
+            'budget_count': summary_data['count']
+        })
     @action(detail=False, methods=['get'])
     def current_month(self, request):
         """Get current month's budgets"""

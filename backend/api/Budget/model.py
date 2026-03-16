@@ -24,12 +24,30 @@ class Budget(models.Model):
         db_index=True
     )
 
+    BUDGET_TYPE_CHOICES = [
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+        ('yearly', 'Yearly'),
+    ]
+    
+    budget_type = models.CharField(
+        max_length=20,
+        choices=BUDGET_TYPE_CHOICES,
+        db_index=True,
+        default='monthly'
+    )
+
     month = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(12)],
+        null=True,
+        blank=True,
         db_index=True
     )
     year = models.IntegerField(
         validators=[MinValueValidator(2000), MaxValueValidator(2100)],
+        null=True,
+        blank=True,
         db_index=True
     )
     
@@ -38,6 +56,14 @@ class Budget(models.Model):
         null=True,
         blank=True,
         db_index=True
+    )
+    
+    quarterly = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Format: 'YYYY-MM-DD to YYYY-MM-DD'"
     )
 
     amount = models.DecimalField(
@@ -51,15 +77,20 @@ class Budget(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ["user", "category", "month", "year"]
-        ordering = ["-year", "-month", "category__name"]
+        unique_together = ["user", "category", "month", "year", "quarterly", "budget_type"]
+        ordering = ["-created_at", "category__name"]
         indexes = [
             models.Index(fields=["user", "year", "month"]),
             models.Index(fields=["category", "year", "month"]),
+            models.Index(fields=["user", "quarterly"]),
+            models.Index(fields=["budget_type"]),
         ]
     def __str__(self):
         if self.week is not None:
             return f"{self.user.username} - {self.category.name} (Week {self.week}/{self.year})"
+        
+        if self.quarterly is not None:
+            return f"{self.user.username} - {self.category.name} ({self.quarterly})"
         
         if self.month is not None:
             return f"{self.user.username} - {self.category.name} ({self.month:02d}/{self.year})"
