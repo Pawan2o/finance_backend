@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.models import User
+from api.User.model import CustomUser
 from django.utils.deconstruct import deconstructible
 import uuid
 import os
@@ -15,8 +15,10 @@ import os
 #         return os.path.join(self.base_path, new_name)
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    contact_no = models.BigIntegerField(null=True)
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    contact_no = models.CharField(max_length=15, null=True, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+
     # logo = models.ImageField(upload_to=UploadToUserFolder('clientData/%Y/%m/%d/'), null=True, blank=True)
     # digital_signature = models.ImageField(upload_to=UploadToUserFolder('clientData/%Y/%m/%d/'), null=True, blank=True)
 

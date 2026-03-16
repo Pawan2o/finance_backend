@@ -9,9 +9,19 @@ from api.ForgetPassword.view import PasswordResetRequestView
 from api.IsSuperUser.view import CheckUserType
 from api.CreateUser import views as createUserViews
 
-from api.CustomApi.emailotp import SendEmailOTP,VerifyEmailOTP
+# from api.CustomApi.emailotp import SendEmailOTP,VerifyEmailOTP
 from api.Type.view import TypeViewSet
 from api.Category.view import CategoryViewSet
+from api.PaymentMethod.view import PaymentMethodViewSet
+from api.Transactions.view import TransactionViewSet
+from api.Greeting.view import GreetingViewSet
+from api.RecurringTransaction.view import RecurringTransactionViewSet
+from api.Budget.view import BudgetViewSet
+from api.SavingsGoals.view import SavingsGoalsViewSet
+
+
+#Custom API
+from api.CustomApi.deleteUser import DeleteUserAPI
 
 from rest_framework import routers
 from rest_framework import permissions
@@ -19,11 +29,17 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 router=routers.DefaultRouter()
-router.register(r'user',userView.UserViewset, basename='user'),
-router.register(r'role',roleView.RoleViewset, basename='role'),
-router.register(r'permission', permissionView.PermissionViewset, basename='permission'),
-router.register(r'type', TypeViewSet, basename='type'),
-router.register(r'category', CategoryViewSet, basename='category'),
+router.register(r'user',userView.UserViewset, basename='user')
+router.register(r'role',roleView.RoleViewset, basename='role')
+router.register(r'permission', permissionView.PermissionViewset, basename='permission')
+router.register(r'type', TypeViewSet, basename='type')
+router.register(r'category', CategoryViewSet, basename='category')
+router.register(r'paymentMethod', PaymentMethodViewSet, basename='paymentMethod')
+router.register(r'transaction', TransactionViewSet, basename='transaction')
+router.register(r'greeting', GreetingViewSet, basename='greeting')
+router.register(r'recurring', RecurringTransactionViewSet, basename='recurring')
+router.register(r'budgets', BudgetViewSet, basename='budgets')
+router.register(r'savingsGoals', SavingsGoalsViewSet, basename='savingsGoals')
 
 # Create a schema view for drf-yasg
 schema_view = get_schema_view(
@@ -37,6 +53,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
+    authentication_classes=[],
 )
 
 urlpatterns = [
@@ -49,6 +66,9 @@ urlpatterns = [
     path('isSuperUser/', CheckUserType.as_view(), name='isSuperUser'),
     path('createUser/', createUserViews.CreateUserAPI.as_view(), name='create-user'),
     
-    path('sendOtp/', SendEmailOTP.as_view(), name='sendOtp'),
-    path('verifyOtp/', VerifyEmailOTP.as_view(), name='verifyOtp'),
+    path('deleteUser/<uuid:user_id>/', DeleteUserAPI.as_view(), name='delete_user'),
+
+    
+    # path('sendOtp/', SendEmailOTP.as_view(), name='sendOtp'),
+    # path('verifyOtp/', VerifyEmailOTP.as_view(), name='verifyOtp'),
 ]

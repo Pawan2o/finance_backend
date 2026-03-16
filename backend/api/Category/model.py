@@ -13,17 +13,16 @@ class Category(models.Model):
     type = models.ForeignKey(
         Type,
         on_delete=models.CASCADE,
-        related_name="categories"
+        related_name="categories",
+        db_index=True
     )
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, db_index=True)
+    material_icon = models.CharField(max_length=100, null=True, blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        unique_together = ("type", "name")
 
     def __str__(self):
         return self.name
