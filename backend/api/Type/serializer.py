@@ -6,7 +6,7 @@ from api.Category.model import Category
 class CategoryNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ["id", "name"]
+        fields = ["id", "name","material_icon"]
 
 
 class TypeSerializer(serializers.ModelSerializer):
