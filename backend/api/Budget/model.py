@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from api.Category.model import Category
+from api.Type.model import Type
 from api.User.model import CustomUser
 
 class Budget(models.Model):
@@ -17,8 +17,8 @@ class Budget(models.Model):
         db_index=True
     )
 
-    category = models.ForeignKey(
-        Category,
+    type = models.ForeignKey(
+        Type,
         on_delete=models.CASCADE,
         related_name="budgets",
         db_index=True
@@ -58,12 +58,16 @@ class Budget(models.Model):
         db_index=True
     )
     
-    quarterly = models.CharField(
-        max_length=50,
+    quarterly_start_date = models.DateField(
         null=True,
         blank=True,
-        db_index=True,
-        help_text="Format: 'YYYY-MM-DD to YYYY-MM-DD'"
+        db_index=True
+    )
+    
+    quarterly_end_date = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True
     )
 
     amount = models.DecimalField(
@@ -77,22 +81,44 @@ class Budget(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ["user", "category", "month", "year", "quarterly", "budget_type"]
-        ordering = ["-created_at", "category__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'type', 'budget_type', 'month', 'year'],
+                condition=models.Q(budget_type='monthly'),
+                name='unique_monthly_budget'
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'type', 'budget_type', 'week', 'year'],
+                condition=models.Q(budget_type='weekly'),
+                name='unique_weekly_budget'
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'type', 'budget_type', 'quarterly_start_date'],
+                condition=models.Q(budget_type='quarterly'),
+                name='unique_quarterly_budget'
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'type', 'budget_type', 'year'],
+                condition=models.Q(budget_type='yearly'),
+                name='unique_yearly_budget'
+            ),
+        ]
+        ordering = ["-created_at", "type__name"]
         indexes = [
             models.Index(fields=["user", "year", "month"]),
-            models.Index(fields=["category", "year", "month"]),
-            models.Index(fields=["user", "quarterly"]),
+            models.Index(fields=["type", "year", "month"]),
+            models.Index(fields=["user", "quarterly_start_date"]),
+            models.Index(fields=["quarterly_start_date", "quarterly_end_date"]),
             models.Index(fields=["budget_type"]),
         ]
     def __str__(self):
         if self.week is not None:
-            return f"{self.user.username} - {self.category.name} (Week {self.week}/{self.year})"
+            return f"{self.user.username} - {self.type.name} (Week {self.week}/{self.year})"
         
-        if self.quarterly is not None:
-            return f"{self.user.username} - {self.category.name} ({self.quarterly})"
+        if self.quarterly_start_date is not None:
+            return f"{self.user.username} - {self.type.name} ({self.quarterly_start_date} to {self.quarterly_end_date})"
         
         if self.month is not None:
-            return f"{self.user.username} - {self.category.name} ({self.month:02d}/{self.year})"
+            return f"{self.user.username} - {self.type.name} ({self.month:02d}/{self.year})"
         
-        return f"{self.user.username} - {self.category.name} ({self.year})"
+        return f"{self.user.username} - {self.type.name} ({self.year})"
