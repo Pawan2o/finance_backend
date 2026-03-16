@@ -4,9 +4,6 @@
 
 echo "Building financemanage-finance_backend:V1..."
 
-# Change to backend directory where the actual code is
-cd backend
-
 # Build the Docker image
 docker build --no-cache -t 147.79.66.211:3000/docker/financemanage-finance_backend:V1 .
 
