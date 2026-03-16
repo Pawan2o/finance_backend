@@ -2,11 +2,11 @@ ENV=local
 SECRET_KEY=django-insecure-w(#k=^4=$@1-baz-a0k&t6t5_2f_i-=a9-=6_jwzr-lzm9_m0r
 BASE_URL=http://127.0.0.1:8000
 
-USER=postgres
-HOST=localhost
-PORT=5433
-DB=rupees
-PASS=hardy@271003
+USER=humbingo
+HOST=pt-db-paisatrack
+PORT=5600
+DB=pt-db-paisatrack
+PASS=Welcome@1
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.hostinger.com'
