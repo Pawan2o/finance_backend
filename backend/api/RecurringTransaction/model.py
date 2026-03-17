@@ -14,6 +14,7 @@ class RecurringTransaction(models.Model):
         ("weekly", "Weekly"),
         ("monthly", "Monthly"),
         ("yearly", "Yearly"),
+        ("quarterly", "Quarterly"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -74,6 +75,8 @@ class RecurringTransaction(models.Model):
             return self.next_run_date + relativedelta(weeks=1)
         elif self.frequency == "monthly":
             return self.next_run_date + relativedelta(months=1)
+        elif self.frequency == "quarterly":
+            return self.next_run_date + relativedelta(months=3)
         elif self.frequency == "yearly":
             return self.next_run_date + relativedelta(years=1)
         return self.next_run_date
