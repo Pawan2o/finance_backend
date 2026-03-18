@@ -30,7 +30,11 @@ class BudgetViewSet(viewsets.ModelViewSet):
         ).select_related('type')
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        try:
+            serializer.save(user=self.request.user)
+        except Exception as e:
+            print(f"Budget creation error: {str(e)}")
+            raise
 
     def perform_destroy(self, instance):
         instance.deleted_at = timezone.now()
