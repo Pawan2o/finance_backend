@@ -16,4 +16,5 @@ class ApiConfig(AppConfig):
         import api.RecurringTransaction.model
         import api.Budget.model
         import api.SavingsGoals.model
+        import api.AuditLog.model
         

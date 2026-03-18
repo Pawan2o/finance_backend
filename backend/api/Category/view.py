@@ -23,4 +23,5 @@ class CategoryViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         instance.deleted_at = timezone.now()
         instance.save()
+        
         return APIResponse.deleted("Category deleted successfully")

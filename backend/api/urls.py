@@ -18,7 +18,7 @@ from api.Greeting.view import GreetingViewSet
 from api.RecurringTransaction.view import RecurringTransactionViewSet
 from api.Budget.view import BudgetViewSet
 from api.SavingsGoals.view import SavingsGoalsViewSet
-
+from api.AuditLog.view import AuditLogViewSet
 
 #Custom API
 from api.CustomApi.deleteUser import DeleteUserAPI
@@ -40,13 +40,14 @@ router.register(r'greeting', GreetingViewSet, basename='greeting')
 router.register(r'recurring', RecurringTransactionViewSet, basename='recurring')
 router.register(r'budgets', BudgetViewSet, basename='budgets')
 router.register(r'savingsGoals', SavingsGoalsViewSet, basename='savingsGoals')
+router.register(r'auditlog', AuditLogViewSet, basename='auditlog')
 
 # Create a schema view for drf-yasg
 schema_view = get_schema_view(
     openapi.Info(
-        title="Placeholder API",
+        title="paisaTrack API",
         default_version='v1',
-        description="Your API Description",
+        description="paisaTrack API",
         terms_of_service="https://www.example.com/policies/terms/",
         contact=openapi.Contact(email="contact@example.com"),
         license=openapi.License(name="BSD License"),
@@ -67,7 +68,6 @@ urlpatterns = [
     path('createUser/', createUserViews.CreateUserAPI.as_view(), name='create-user'),
     
     path('deleteUser/<uuid:user_id>/', DeleteUserAPI.as_view(), name='delete_user'),
-
     
     # path('sendOtp/', SendEmailOTP.as_view(), name='sendOtp'),
     # path('verifyOtp/', VerifyEmailOTP.as_view(), name='verifyOtp'),

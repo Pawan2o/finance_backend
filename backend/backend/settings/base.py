@@ -39,6 +39,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'api.AuditLog.middleware.AuditLogMiddleware',  # Updated audit middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     
@@ -131,6 +132,12 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': int(os.getenv("PAGE_SIZE", '10')),  # Number of items per page
 
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    
+    # Ensure proper JSON rendering
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'UNICODE_JSON': False,  # Prevent HTML encoding
 }
 
 SIMPLE_JWT = {
