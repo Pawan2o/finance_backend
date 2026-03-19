@@ -1,10 +1,15 @@
 from django.db import models
 from api.User.model import CustomUser
 import json
+import logging
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.contrib.auth.signals import user_logged_in, user_logged_out
 from threading import local
+from django.conf import settings
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 class AuditLog(models.Model):
     ACTION_CHOICES = [
@@ -35,7 +40,6 @@ class AuditLog(models.Model):
     module = models.CharField(max_length=100, db_index=True)  # Model name like 'Category', 'Transaction'
     object_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     changes = models.JSONField(null=True, blank=True)  # Store old and new values
-    user_agent = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     
     class Meta:
@@ -54,12 +58,18 @@ class AuditLog(models.Model):
     def log_activity(cls, user, action, module, object_id=None, old_data=None, new_data=None, request=None):
         """Create audit log entry"""
         changes = None
+        
+        # Always store changes data if provided
         if old_data is not None or new_data is not None:
             changes = {}
             if old_data is not None:
                 changes['old'] = old_data
             if new_data is not None:
                 changes['new'] = new_data
+        
+        # For LOGIN/LOGOUT, store basic info
+        if action in ['LOGIN', 'LOGOUT'] and not changes:
+            changes = {'action': action, 'timestamp': str(timezone.now())}
         
         audit_data = {
             'user': user,
@@ -69,18 +79,10 @@ class AuditLog(models.Model):
             'changes': changes,
         }
         
-        if request:
-            audit_data.update({
-                'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
-            })
-        
+        logger.debug(f"Creating audit log: {audit_data}")
         return cls.objects.create(**audit_data)
     
-    @classmethod
-    def debug_ip_headers(cls, request):
-        """Debug method to see all IP-related headers"""
-        # This method is no longer needed since IP tracking is removed
-        return {"message": "IP tracking has been disabled"}
+
     
 
 
@@ -102,113 +104,167 @@ def get_current_user():
 # Signals for auto-logging
 @receiver(pre_save)
 def store_original_values(sender, instance, **kwargs):
+    """Store original values before update for audit tracking"""
     if sender._meta.app_label != 'api' or sender == AuditLog:
         return
+    
     if instance.pk:
         try:
             original = sender.objects.get(pk=instance.pk)
             instance._original_values = {}
-            for field in sender._meta.fields[:5]:
+            
+            # Track all fields except sensitive ones
+            excluded_fields = {'password', 'token', 'secret', 'key'}
+            
+            for field in sender._meta.fields:
+                if field.name.lower() in excluded_fields:
+                    continue
+                    
                 try:
                     value = getattr(original, field.name)
                     if hasattr(value, 'pk'):
                         instance._original_values[field.name] = str(value)
-                    elif hasattr(value, '__str__'):
-                        instance._original_values[field.name] = str(value)
-                    else:
+                    elif isinstance(value, (str, int, float, bool)) or value is None:
                         instance._original_values[field.name] = value
-                except:
-                    pass
+                    else:
+                        instance._original_values[field.name] = str(value)
+                except Exception as e:
+                    logger.warning(f"Failed to get original value for {field.name}: {e}")
+            
+            logger.debug(f"Stored original values for {sender.__name__} {instance.pk}: {instance._original_values}")
+                    
         except sender.DoesNotExist:
+            instance._original_values = {}
+            logger.debug(f"No existing record found for {sender.__name__} {instance.pk}")
+        except Exception as e:
+            logger.error(f"Error storing original values for {sender.__name__}: {e}")
             instance._original_values = {}
     else:
         instance._original_values = {}
+        logger.debug(f"New record for {sender.__name__}, no original values to store")
 
 @receiver(post_save)
 def log_model_save(sender, instance, created, **kwargs):
+    """Log model save operations"""
     try:
         if sender._meta.app_label != 'api' or sender == AuditLog:
             return
         
-        # Debug print
-        print(f"Signal triggered for {sender.__name__}: {instance.pk}")
-        
         user = get_current_user()
         if not user:
-            print("No current user found")
+            logger.debug(f"No authenticated user found for {sender.__name__} operation")
             return
-        
-        print(f"Current user: {user.username}")
         
         action = 'CREATE' if created else 'UPDATE'
         new_data = {}
-        for field in sender._meta.fields[:5]:
+        excluded_fields = {'password', 'token', 'secret', 'key'}
+        
+        # Capture new values
+        for field in sender._meta.fields:
+            if field.name.lower() in excluded_fields:
+                continue
+                
             try:
                 value = getattr(instance, field.name)
                 if hasattr(value, 'pk'):
                     new_data[field.name] = str(value)
-                elif hasattr(value, '__str__'):
-                    new_data[field.name] = str(value)
-                else:
+                elif isinstance(value, (str, int, float, bool)) or value is None:
                     new_data[field.name] = value
-            except:
-                pass
+                else:
+                    new_data[field.name] = str(value)
+            except Exception as e:
+                logger.warning(f"Failed to get new value for {field.name}: {e}")
+        
+        logger.debug(f"New data for {sender.__name__} {instance.pk}: {new_data}")
         
         old_data = getattr(instance, '_original_values', None) if not created else None
+        
+        logger.debug(f"Old data for {sender.__name__} {instance.pk}: {old_data}")
+        
+        # Always log CREATE operations, for UPDATE only log if there are actual changes
+        if not created and old_data is not None:
+            # Check if there are actual changes
+            has_changes = False
+            changed_fields = []
+            for key, new_value in new_data.items():
+                old_value = old_data.get(key)
+                if old_value != new_value:
+                    has_changes = True
+                    changed_fields.append(f"{key}: {old_value} -> {new_value}")
+            
+            if not has_changes:
+                logger.debug(f"No changes detected for {sender.__name__} {instance.pk}")
+                return
+            else:
+                logger.debug(f"Changes detected for {sender.__name__} {instance.pk}: {changed_fields}")
         
         audit_log = AuditLog.log_activity(
             user=user, action=action, module=sender.__name__,
             object_id=str(instance.pk), old_data=old_data, new_data=new_data,
             request=get_current_request()
         )
-        print(f"Created audit log: {audit_log.id}")
+        
+        logger.info(f"Audit log created: {action} on {sender.__name__} by {user.username}")
         
     except Exception as e:
-        print(f"Error in audit logging: {e}")
+        logger.error(f"Error in audit logging for {sender.__name__}: {e}")
         # Silent fail to prevent breaking the main operation
-        pass
 
 @receiver(post_delete)
 def log_model_delete(sender, instance, **kwargs):
+    """Log model delete operations"""
     try:
         if sender._meta.app_label != 'api' or sender == AuditLog:
             return
+            
         user = get_current_user()
         if not user:
+            logger.debug(f"No authenticated user found for {sender.__name__} delete operation")
             return
         
         old_data = {}
-        for field in sender._meta.fields[:5]:
+        excluded_fields = {'password', 'token', 'secret', 'key'}
+        
+        for field in sender._meta.fields:
+            if field.name.lower() in excluded_fields:
+                continue
+                
             try:
                 value = getattr(instance, field.name)
                 if hasattr(value, 'pk'):
                     old_data[field.name] = str(value)
-                elif hasattr(value, '__str__'):
-                    old_data[field.name] = str(value)
-                else:
+                elif isinstance(value, (str, int, float, bool)) or value is None:
                     old_data[field.name] = value
-            except:
-                pass
+                else:
+                    old_data[field.name] = str(value)
+            except Exception as e:
+                logger.warning(f"Failed to get value for {field.name} during delete: {e}")
         
         AuditLog.log_activity(
             user=user, action='DELETE', module=sender.__name__,
             object_id=str(instance.pk), old_data=old_data, request=get_current_request()
         )
+        
+        logger.info(f"Audit log created: DELETE on {sender.__name__} by {user.username}")
+        
     except Exception as e:
-        # Silent fail to prevent breaking the main operation
-        pass
+        logger.error(f"Error in audit logging for {sender.__name__} delete: {e}")
 
 @receiver(user_logged_in)
 def log_user_login(sender, request, user, **kwargs):
+    """Log user login events"""
     try:
         AuditLog.log_activity(user=user, action='LOGIN', module='Auth', request=request)
-    except:
-        pass
+        logger.info(f"User login logged: {user.username}")
+    except Exception as e:
+        logger.error(f"Error logging user login: {e}")
 
 @receiver(user_logged_out)
 def log_user_logout(sender, request, user, **kwargs):
+    """Log user logout events"""
     try:
         if user and user.is_authenticated:
             AuditLog.log_activity(user=user, action='LOGOUT', module='Auth', request=request)
-    except:
-        pass
+            logger.info(f"User logout logged: {user.username}")
+    except Exception as e:
+        logger.error(f"Error logging user logout: {e}")

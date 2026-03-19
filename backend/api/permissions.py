@@ -1,7 +1,16 @@
-from rest_framework.permissions import BasePermission, DjangoModelPermissions
+from rest_framework.permissions import BasePermission, DjangoModelPermissions, IsAuthenticated
 from django.contrib.auth.models import Group, Permission as AuthPermission
 from django.urls import resolve
 import re
+
+
+class IsSuperUser(BasePermission):
+    """
+    Allows access only to superusers.
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_superuser
+
 
 class CustomPermission(BasePermission):
     req = None

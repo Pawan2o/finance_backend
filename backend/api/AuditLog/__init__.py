@@ -1,0 +1,1 @@
+# AuditLog app initialization
