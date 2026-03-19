@@ -1,157 +1,293 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import OrderingFilter, SearchFilter
-from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import Count, Q
+from django.core.cache import cache
+import logging
 from .model import AuditLog
 from .serializers import AuditLogSerializer, AuditLogListSerializer
 from api.response_formatter import APIResponse
+from api.permissions import IsSuperUser
 
-class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    ordering = ['-timestamp']
-    search_fields = ['user__username', 'module', 'action', 'object_id']
+logger = logging.getLogger(__name__)
+
+
+class AuditLogViewSet(viewsets.ModelViewSet):
+    queryset = AuditLog.objects.all()
+    permission_classes = [IsAuthenticated, IsSuperUser]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['action', 'module', 'user']
-    
-    def get_queryset(self):
-        # Only superusers can see all logs, regular users see only their own
-        if self.request.user.is_superuser:
-            queryset = AuditLog.objects.all().select_related('user')
-        else:
-            queryset = AuditLog.objects.filter(user=self.request.user).select_related('user')
-        
-        # Filter out admin if requested
-        exclude_admin = self.request.query_params.get('exclude_admin', 'false').lower() == 'true'
-        if exclude_admin:
-            queryset = queryset.exclude(user__username='admin')
-            
-        return queryset
-    
+    search_fields = ['module', 'object_id', 'user__username']
+    ordering_fields = ['timestamp', 'action', 'module']
+    ordering = ['-timestamp']
+
     def get_serializer_class(self):
         if self.action == 'list':
             return AuditLogListSerializer
         return AuditLogSerializer
-    
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+    def get_queryset(self):
+        """Optimized queryset with proper filtering and caching"""
+        queryset = super().get_queryset()
         
-        serializer = self.get_serializer(queryset, many=True)
-        return APIResponse.success("Audit logs retrieved successfully", serializer.data)
-    
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        return APIResponse.success("Audit log retrieved successfully", serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Get audit log statistics"""
-        queryset = self.get_queryset()
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
         
-        # Basic stats
-        total_logs = queryset.count()
-        today_logs = queryset.filter(timestamp__date=timezone.now().date()).count()
-        week_logs = queryset.filter(timestamp__gte=timezone.now() - timedelta(days=7)).count()
+        if start_date:
+            try:
+                queryset = queryset.filter(timestamp__date__gte=start_date)
+            except ValueError:
+                logger.warning(f"Invalid start_date format: {start_date}")
+                
+        if end_date:
+            try:
+                queryset = queryset.filter(timestamp__date__lte=end_date)
+            except ValueError:
+                logger.warning(f"Invalid end_date format: {end_date}")
         
-        # Action breakdown
-        action_stats = queryset.values('action').annotate(count=Count('id')).order_by('-count')
+        # Hide admin logs if requested
+        hide_admin = self.request.query_params.get('hide_admin', 'false').lower() == 'true'
+        if hide_admin:
+            queryset = queryset.exclude(user__is_superuser=True)
         
-        # Module breakdown
-        module_stats = queryset.values('module').annotate(count=Count('id')).order_by('-count')
-        
-        # Recent activity (last 24 hours)
-        recent_activity = queryset.filter(
-            timestamp__gte=timezone.now() - timedelta(hours=24)
-        ).values('action', 'module').annotate(count=Count('id'))
-        
-        stats_data = {
-            'summary': {
+        # Default to last 30 days if no date filter provided
+        if not start_date and not end_date:
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            queryset = queryset.filter(timestamp__gte=thirty_days_ago)
+            
+        return queryset.select_related('user', 'created_by')
+
+    @action(detail=False, methods=['delete'], url_path='cleanup')
+    def cleanup_logs(self, request):
+        """Clean up old audit logs with enhanced validation"""
+        try:
+            days = request.query_params.get('days', '30')
+            dry_run = request.query_params.get('dry_run', 'false').lower() == 'true'
+            
+            # Validate days parameter
+            try:
+                days = int(days)
+            except ValueError:
+                return APIResponse.error(
+                    message="Days parameter must be a valid integer",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Restrict allowed values for safety
+            allowed_days = [0, 1, 7, 30, 90, 180, 365]
+            if days not in allowed_days:
+                return APIResponse.error(
+                    message=f"Days must be one of: {allowed_days}",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate logs to delete
+            if days == 0:
+                logs_to_delete = AuditLog.objects.all()
+                cutoff_date = None
+                warning_msg = "This will delete ALL audit logs permanently!"
+            else:
+                cutoff_date = timezone.now() - timedelta(days=days)
+                logs_to_delete = AuditLog.objects.filter(timestamp__lt=cutoff_date)
+                warning_msg = f"This will delete logs older than {days} days"
+            
+            count = logs_to_delete.count()
+            total_logs = AuditLog.objects.count()
+            
+            logger.info(f"Cleanup request: days={days}, dry_run={dry_run}, count={count}")
+            
+            if dry_run:
+                return APIResponse.success(
+                    data={
+                        'count_to_delete': count,
+                        'cutoff_date': cutoff_date.isoformat() if cutoff_date else 'ALL',
+                        'days': days,
+                        'dry_run': True,
+                        'total_logs': total_logs,
+                        'remaining_after_cleanup': total_logs - count,
+                        'warning': warning_msg
+                    },
+                    message=f"Dry run: Would delete {count} audit logs {'(ALL LOGS)' if days == 0 else f'older than {days} days'}"
+                )
+            
+            if count == 0:
+                return APIResponse.success(
+                    data={
+                        'deleted_count': 0, 
+                        'days': days,
+                        'total_logs': total_logs,
+                        'cutoff_date': cutoff_date.isoformat() if cutoff_date else 'ALL'
+                    },
+                    message=f"No audit logs found {'to delete' if days == 0 else f'older than {days} days'}"
+                )
+            
+            # Perform deletion in batches for large datasets
+            batch_size = 1000
+            deleted_total = 0
+            
+            while True:
+                batch_ids = list(logs_to_delete.values_list('id', flat=True)[:batch_size])
+                if not batch_ids:
+                    break
+                    
+                deleted_count, _ = AuditLog.objects.filter(id__in=batch_ids).delete()
+                deleted_total += deleted_count
+                
+                if deleted_count < batch_size:
+                    break
+            
+            logger.info(f"Cleanup completed: deleted {deleted_total} logs")
+            
+            return APIResponse.success(
+                data={
+                    'deleted_count': deleted_total,
+                    'days': days,
+                    'cutoff_date': cutoff_date.isoformat() if cutoff_date else 'ALL',
+                    'remaining_logs': AuditLog.objects.count()
+                },
+                message=f"Successfully deleted {deleted_total} audit logs {'(ALL LOGS CLEARED)' if days == 0 else f'older than {days} days'}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in cleanup_logs: {str(e)}")
+            return APIResponse.error(
+                message="An error occurred during cleanup",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'], url_path='stats')
+    def get_stats(self, request):
+        """Get comprehensive audit log statistics with caching"""
+        try:
+            # Try to get from cache first
+            cache_key = 'audit_log_stats'
+            cached_stats = cache.get(cache_key)
+            
+            if cached_stats:
+                return APIResponse.success(
+                    data=cached_stats,
+                    message="Audit log statistics retrieved from cache"
+                )
+            
+            now = timezone.now()
+            
+            # Basic counts
+            total_logs = AuditLog.objects.count()
+            
+            # Time-based statistics
+            time_stats = {
                 'total_logs': total_logs,
-                'today_logs': today_logs,
-                'week_logs': week_logs,
-                'active_users': queryset.values('user').distinct().count()
-            },
-            'actions': list(action_stats),
-            'modules': list(module_stats),
-            'recent_activity': list(recent_activity)
-        }
-        
-        return APIResponse.success("Audit log statistics retrieved successfully", stats_data)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_delete_admin_logs(self, request):
-        """Delete old admin logs (older than specified days)"""
-        if not request.user.is_superuser:
-            return APIResponse.error("Only superusers can delete audit logs", status_code=403)
+                'logs_today': AuditLog.objects.filter(
+                    timestamp__date=now.date()
+                ).count(),
+                'logs_7_days': AuditLog.objects.filter(
+                    timestamp__gte=now - timedelta(days=7)
+                ).count(),
+                'logs_30_days': AuditLog.objects.filter(
+                    timestamp__gte=now - timedelta(days=30)
+                ).count(),
+                'logs_90_days': AuditLog.objects.filter(
+                    timestamp__gte=now - timedelta(days=90)
+                ).count(),
+            }
             
-        days = request.data.get('days', 30)
-        cutoff_date = timezone.now() - timedelta(days=days)
-        
-        deleted_count = AuditLog.objects.filter(
-            user__username='admin',
-            timestamp__lt=cutoff_date
-        ).delete()[0]
-        
-        return APIResponse.success(f"Deleted {deleted_count} old admin logs", {'deleted_count': deleted_count})
-    
-    @action(detail=False, methods=['get'])
-    def admin_summary(self, request):
-        """Get summarized admin activities instead of individual entries"""
-        # Get base queryset
-        if self.request.user.is_superuser:
-            queryset = AuditLog.objects.all().select_related('user')
-        else:
-            queryset = AuditLog.objects.filter(user=self.request.user).select_related('user')
-        
-        queryset = queryset.filter(user__username='admin')
-        
-        # Group by date, module, and action
-        from django.db.models import Count
-        from django.db.models.functions import TruncDate
-        
-        summary = queryset.annotate(
-            date=TruncDate('timestamp')
-        ).values('date', 'module', 'action').annotate(
-            count=Count('id')
-        ).order_by('-date', 'module', 'action')
-        
-        return APIResponse.success("Admin activity summary retrieved", list(summary))
-    
-    @action(detail=False, methods=['get'])
-    def debug_ip(self, request):
-        """Debug endpoint - IP tracking disabled"""
-        if not request.user.is_superuser:
-            return APIResponse.error("Only superusers can access debug info", status_code=403)
+            # Action-based statistics
+            action_stats = dict(
+                AuditLog.objects.values('action').annotate(
+                    count=Count('id')
+                ).values_list('action', 'count')
+            )
             
-        return APIResponse.success("IP tracking has been disabled", {"message": "IP address logging is no longer active"})
-    
-    @action(detail=False, methods=['get'])
-    def timeline(self, request):
-        """Get timeline of activities for the last 30 days"""
-        queryset = self.get_queryset()
-        
-        # Get activities for last 30 days
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        timeline_data = []
-        
-        for i in range(30):
-            date = (thirty_days_ago + timedelta(days=i)).date()
-            day_logs = queryset.filter(timestamp__date=date)
+            # Module-based statistics
+            module_stats = dict(
+                AuditLog.objects.values('module').annotate(
+                    count=Count('id')
+                ).order_by('-count')[:10].values_list('module', 'count')
+            )
             
-            timeline_data.append({
-                'date': date.isoformat(),
-                'total_activities': day_logs.count(),
-                'actions': dict(day_logs.values('action').annotate(count=Count('id')).values_list('action', 'count')),
-                'modules': dict(day_logs.values('module').annotate(count=Count('id')).values_list('module', 'count'))
-            })
-        
-        return APIResponse.success("Activity timeline retrieved successfully", timeline_data)
+            # User activity statistics
+            user_stats = list(
+                AuditLog.objects.filter(user__isnull=False)
+                .values('user__username')
+                .annotate(count=Count('id'))
+                .order_by('-count')[:10]
+            )
+            
+            stats = {
+                **time_stats,
+                'action_breakdown': action_stats,
+                'top_modules': module_stats,
+                'top_users': user_stats,
+                'old_logs_30_days': AuditLog.objects.filter(
+                    timestamp__lt=now - timedelta(days=30)
+                ).count(),
+                'old_logs_90_days': AuditLog.objects.filter(
+                    timestamp__lt=now - timedelta(days=90)
+                ).count(),
+                'generated_at': now.isoformat()
+            }
+            
+            # Cache for 5 minutes
+            cache.set(cache_key, stats, 300)
+            
+            logger.info("Audit log statistics generated and cached")
+            
+            return APIResponse.success(
+                data=stats,
+                message="Audit log statistics retrieved successfully"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in get_stats: {str(e)}")
+            return APIResponse.error(
+                message="An error occurred while retrieving statistics",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'], url_path='user-activity')
+    def user_activity(self, request):
+        """Get user-specific activity logs"""
+        try:
+            user_id = request.query_params.get('user_id')
+            days = int(request.query_params.get('days', 7))
+            
+            if not user_id:
+                return APIResponse.error(
+                    message="user_id parameter is required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            start_date = timezone.now() - timedelta(days=days)
+            
+            logs = AuditLog.objects.filter(
+                user_id=user_id,
+                timestamp__gte=start_date
+            ).select_related('user').order_by('-timestamp')
+            
+            serializer = AuditLogListSerializer(logs, many=True)
+            
+            return APIResponse.success(
+                data={
+                    'logs': serializer.data,
+                    'count': logs.count(),
+                    'user_id': user_id,
+                    'days': days
+                },
+                message=f"User activity for last {days} days retrieved successfully"
+            )
+            
+        except ValueError:
+            return APIResponse.error(
+                message="Invalid days parameter",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error in user_activity: {str(e)}")
+            return APIResponse.error(
+                message="An error occurred while retrieving user activity",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
