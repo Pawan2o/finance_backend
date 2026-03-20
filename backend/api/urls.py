@@ -5,7 +5,7 @@ from api.Permission import view as permissionView
 from api.Role import view as roleView
 from api.User import view as userView
 from api.ChangeMyPassword.view import ChangeMyPasswordView
-from api.ForgetPassword.view import PasswordResetRequestView
+from api.ForgetPassword.view import PasswordResetRequestView, SendForgetPasswordOTP, ResetPasswordWithOTP
 from api.IsSuperUser.view import CheckUserType
 from api.CreateUser import views as createUserViews
 
@@ -64,6 +64,10 @@ urlpatterns = [
     path('changeMyPassword/', ChangeMyPasswordView.as_view(), name='changeMyPassword'),
     path('passwordReset/', PasswordResetRequestView.as_view(), name='passwordResetRequest'),
     # path('pass-reset/<str:temp_token>/', PasswordResetConfirmView.as_view(), name='pass-reset'),  # put it in security(auth) app's urls
+    
+    # OTP-based Forget Password
+    path('passwordReset/send-otp/', SendForgetPasswordOTP.as_view(), name='sendForgetPasswordOTP'),
+    path('passwordReset/verify-otp/', ResetPasswordWithOTP.as_view(), name='resetPasswordWithOTP'),
     path('isSuperUser/', CheckUserType.as_view(), name='isSuperUser'),
     path('createUser/', createUserViews.CreateUserAPI.as_view(), name='create-user'),
     
