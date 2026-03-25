@@ -172,12 +172,34 @@ def log_model_save(sender, instance, created, **kwargs):
             logger.debug(f"No authenticated user found for {sender.__name__} operation")
             return
         
-        action = 'CREATE' if created else 'UPDATE'
-        new_data = get_model_data(instance, sender)
+        # Check for soft delete patterns
         old_data = getattr(instance, '_original_values', None) if not created else None
+        new_data = get_model_data(instance, sender)
+        
+        # Detect soft delete: deleted_at was null and now has a value OR is_active changed from True to False
+        is_soft_delete = (
+            not created and 
+            old_data and (
+                # Pattern 1: deleted_at field soft delete
+                ('deleted_at' in old_data and 
+                 'deleted_at' in new_data and 
+                 old_data['deleted_at'] is None and 
+                 new_data['deleted_at'] is not None) or
+                # Pattern 2: is_active field soft delete
+                ('is_active' in old_data and 
+                 'is_active' in new_data and 
+                 old_data['is_active'] is True and 
+                 new_data['is_active'] is False)
+            )
+        )
+        
+        if is_soft_delete:
+            action = 'DELETE'
+        else:
+            action = 'CREATE' if created else 'UPDATE'
         
         # For UPDATE, only log if there are actual changes
-        if not created and old_data is not None:
+        if action == 'UPDATE' and old_data is not None:
             has_changes = any(old_data.get(key) != new_value for key, new_value in new_data.items())
             if not has_changes:
                 logger.debug(f"No changes detected for {sender.__name__} {instance.pk}")

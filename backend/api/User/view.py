@@ -6,6 +6,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.decorators import action
+from django.http import Http404
 
 
 class UserViewset(ModelViewSet):
@@ -19,7 +21,31 @@ class UserViewset(ModelViewSet):
     ordering = ['-date_joined']
 
     def destroy(self, request, *args, **kwargs):
+        """Soft delete - deactivate user"""
         instance = self.get_object()
         instance.is_active = False
         instance.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({
+            'message': 'User deactivated successfully',
+            'action': 'soft_delete'
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['delete'], url_path='permanent-delete')
+    def permanent_delete(self, request, pk=None):
+        """Hard delete - permanently remove user from database"""
+        try:
+            instance = self.get_object()
+            username = instance.username
+            instance.delete()  # This will trigger post_delete signal
+            return Response({
+                'message': f'User {username} permanently deleted from database',
+                'action': 'hard_delete'
+            }, status=status.HTTP_200_OK)
+        except Http404:
+            return Response({
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'error': f'Failed to delete user: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
