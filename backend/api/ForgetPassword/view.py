@@ -3,7 +3,7 @@
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, send_mail
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,6 +13,7 @@ from rest_framework import serializers
 from django.conf import settings
 from django.core.cache import cache
 import uuid
+import random
 
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]  # Allows access to any user, authenticated or not
@@ -87,3 +88,83 @@ class PasswordResetConfirmView(APIView):
                 return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# OTP-based Password Reset Views
+class SendForgetPasswordOTP(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+
+        if not email:
+            return Response({"error": "Email is required"}, status=400)
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+        # Generate 6 digit OTP
+        otp = random.randint(100000, 999999)
+
+        # Store OTP in cache for 5 minutes
+        cache.set(f"forget_password_otp_{email}", otp, timeout=300)
+
+        # Send OTP to email
+        send_mail(
+            subject="Password Reset OTP",
+            message=f"Your password reset OTP is {otp}",
+            from_email=None,
+            recipient_list=[email],
+        )
+
+        return Response({"message": "OTP sent successfully"})
+
+
+class ResetPasswordWithOTP(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+        new_password = request.data.get("new_password")
+
+        if not email or not otp or not new_password:
+            return Response(
+                {"error": "Email, OTP and new password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check OTP from cache
+        stored_otp = cache.get(f"forget_password_otp_{email}")
+
+        if not stored_otp:
+            return Response(
+                {"error": "OTP expired"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if str(stored_otp) != str(otp):
+            return Response(
+                {"error": "Invalid OTP"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get user and update password
+        try:
+            user = CustomUser.objects.get(email=email)
+            user.set_password(new_password)
+            user.save()
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "User not found"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # OTP verified successfully, delete from cache
+        cache.delete(f"forget_password_otp_{email}")
+
+        return Response({
+            "message": "Password reset successfully"
+        }, status=status.HTTP_200_OK)
