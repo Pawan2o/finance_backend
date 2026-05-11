@@ -8,13 +8,13 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out
 from threading import local
 from django.conf import settings
 from django.utils import timezone
-import pytz
-from datetime import datetime
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 logger = logging.getLogger(__name__)
 
 # Constants
-IST_TIMEZONE = pytz.timezone('Asia/Kolkata')
+# Fixed IST offset avoids loading timezone database data during app startup.
+IST_TIMEZONE = dt_timezone(timedelta(hours=5, minutes=30))
 EXCLUDED_FIELDS = {'password', 'token', 'secret', 'key'}
 
 def convert_datetime_to_ist(value):
@@ -23,7 +23,7 @@ def convert_datetime_to_ist(value):
         if timezone.is_aware(value):
             local_time = value.astimezone(IST_TIMEZONE)
         else:
-            utc_time = pytz.utc.localize(value)
+            utc_time = value.replace(tzinfo=dt_timezone.utc)
             local_time = utc_time.astimezone(IST_TIMEZONE)
         return local_time.strftime('%Y-%m-%d %H:%M:%S')
     return value
