@@ -1,17 +1,10 @@
 from rest_framework import serializers
 from api.User.model import CustomUser
-from django.contrib.auth.models import Group
 from django.contrib.auth.hashers import make_password
 from api.UserProfile.model import UserProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
-    groups = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Group.objects.all(),
-        required=False
-    )
-
     contact_no = serializers.CharField(required=False, allow_null=True)
     date_of_birth = serializers.DateField(
         format="%d/%m/%Y",
@@ -22,7 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['id','username','password','email','first_name','last_name','groups','is_staff','is_active','is_superuser','date_joined','last_login','contact_no','date_of_birth']
+        fields = ['id','username','password','email','first_name','last_name','is_staff','is_active','is_superuser','date_joined','last_login','contact_no','date_of_birth']
 
         extra_kwargs = {
             'password': {'write_only': True, 'required': False},

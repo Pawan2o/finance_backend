@@ -8,12 +8,7 @@ class CreateUserAPI(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
         # Check if 'groups' is in the request data; if not, set it to an empty list
-        data = request.data.copy()  # Make a mutable copy of request data
-        if 'groups' not in data:
-            data['groups'] = []
-
-        # Pass the updated data to the serializer
-        serializer = UserSerializer(data=data)
+        serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "User created successfully!"}, status=status.HTTP_201_CREATED)
