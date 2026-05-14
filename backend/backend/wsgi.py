@@ -1,22 +1,10 @@
 import os
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
 
 from django.core.wsgi import get_wsgi_application
 
-ENV = os.getenv("ENV", "development")
-
-if ENV == "local":
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.local")
-
-elif ENV == "development":
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.development")
-
-elif ENV == "stage":
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.stage")
-
-else:
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings.production")
+os.environ.setdefault(
+    "DJANGO_SETTINGS_MODULE",
+    "backend.settings"
+)
 
 application = get_wsgi_application()
