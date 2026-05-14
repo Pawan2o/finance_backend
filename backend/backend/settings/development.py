@@ -1,6 +1,7 @@
 from .base import *
 import os
 from dotenv import load_dotenv
+
 load_dotenv(override=True)
 
 USER = os.getenv("USER")
@@ -10,13 +11,15 @@ DB = os.getenv("DB")
 PASS = os.getenv("PASS")
 
 DEBUG = True
-ALLOWED_HOSTS = ["https://placeholder-dev.humbingo.in"]
 
+ALLOWED_HOSTS = [
+    "*"
+]
 
-CORS_ALLOWED_ORIGINS = [ 
+CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://placeholder-dev.humbingo.in",
+    "https://finance-backend-0bbu.onrender.com",
 ]
 
 DATABASES = {
@@ -29,4 +32,9 @@ DATABASES = {
         'PORT': '5432',
     }
 }
+
 BASE_URL = os.getenv("BASE_URL")
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+CORS_ALLOW_CREDENTIALS = True
