@@ -20,14 +20,13 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 DATABASES = {
-     'default': {
-         'ENGINE': 'django.db.backends.postgresql',
-         'NAME': DB,
-         'HOST': HOST,
-         'PORT': PORT,
-         'USER':USER,
-         'PASSWORD': PASS
-     }
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres',
+        'PASSWORD': os.getenv("DB_PASSWORD"),
+        'HOST': os.getenv("DB_HOST"),
+        'PORT': '5432',
+    }
 }
-
 BASE_URL = os.getenv("BASE_URL")
