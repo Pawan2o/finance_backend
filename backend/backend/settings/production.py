@@ -10,7 +10,7 @@ DB = os.getenv("DB")
 PASS = os.getenv("PASS")
 
 DEBUG = False
-ALLOWED_HOSTS = [ "https://placeholder.humbingo.in"]
+ALLOWED_HOSTS = ["finance-backend-0bbu.onrender.com" ]
 
 CORS_ALLOWED_ORIGINS = [ 
     "https://placeholder.humbingo.in",

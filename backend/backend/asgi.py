@@ -8,7 +8,7 @@ import api.Websocket.routings
 
 os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
-    "backend.settings"
+    "backend.settings.production"
 )
 
 django_asgi_app = get_asgi_application()
