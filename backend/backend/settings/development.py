@@ -29,10 +29,9 @@ DATABASES = {
         'USER': 'postgres',
         'PASSWORD': os.getenv("DB_PASSWORD"),
         'HOST': os.getenv("DB_HOST"),
-        'PORT': '5432',
+        'PORT': '6543',
     }
 }
-
 BASE_URL = os.getenv("BASE_URL")
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
